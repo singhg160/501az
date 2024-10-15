@@ -1,37 +1,27 @@
 name: Deploy VPC
-
 on:
-  workflow_dispatch:
   push:
-    branches: 
+    branches:
       - main
-
 jobs:
   deploy:
-   runs-on: ubuntu-latest
-   steps:
-    - name: Checkout Repo
-      uses: actions/checkout@v2
-    - name: Setup AWS CLI
-      uses: aws-actions/configure-aws-credentials@v2
-      with: 
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-        aws-region: us-east-1
-    - name: Create VPC
-      id: create_vpc
-      run: |
-        VPC_ID=$(aws ec2 create-vpc --cidr-block 10.0.0.0/16 --query 'Vpc.VpcId' --output text)
-        echo "VPC_ID=$VPC_ID" >> $GITHUB_ENV
-        echo "VPC ID: $VPC_ID"
-    - name: Create Subnet
-      id: create_subnet
-      run: |
-        SUBNET_ID=$(aws ec2 create-subnet --vpc-id ${{ env.VPC_ID }} --cidr-block 10.0.1.0/24 --availability-zone us-east-1a --query 'Subnet.SubnetId' --output text)
-        echo "SUBNET_ID=$SUBNET_ID" >> $GITHUB_ENV
-        echo "SUBNET ID: $SUBNET_ID"
-    - name: Outputs
-      run: | 
-        echo "VPC ID: ${{ env.VPC_ID }}"
-        echo "SUBNET ID: ${{ env.SUBNET_ID }}"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+      - name: Setup AWS CLi
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_ID }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+      - name: Deploy Stack
+        id: deploy_stack
+        run: | 
+          aws cloudformation deploy --stack-name test --template-file test.yaml
+      - name: Echo Stack Outputs
+        run: |
+          # Parse the output values and print them
+          echo "Stack Outputs:"
+          aws cloudformation describe-stacks --stack-name test --query "Stack[0].Outputs" --output text
