@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLS Stream with SAS Token using Shaka Player</title>
+    
+    <!-- Include Shaka Player library from the CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.11.7/dist/shaka-player.ui.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/shaka-player@4.11.7/dist/controls.min.css" rel="stylesheet">
+
+    <!-- Include Google Fonts for better typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(to right, #41a833, #2a5298);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        #video {
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            outline: none;
+        }
+
+        #quality-selection {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
+            color: #333;
+        }
+
+        #quality-selection label {
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        #quality-selection select {
+            padding: 5px 10px;
+            font-size: 14px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            background-color: #f7f7f7;
+            outline: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        #quality-selection select:hover {
+            background-color: #eaeaea;
+        }
+
+        /* Add hover effect for better UX */
+        #video:hover {
+            transform: scale(1.02);
+            transition: transform 0.3s ease-in-out;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>MP4 with ORIGIN HOSTNAME </h1>
+
+    <!-- Video player element -->
+    <video id="video" controls width="640" height="360" autoplay></video>
+    
+    
+
+    <script>
+        // Azure SAS token
+        const sasToken = "sp=r&st=2024-10-15T15:58:34Z&se=2024-10-15T23:58:34Z&spr=https&sv=2022-11-02&sr=c&sig=iNvOytfBDB2j5Qa0bLl9rO18F2O7qWnui%2Bt%2BxcUpaTo%3D";
+    
+        // Get the video element
+        const video = document.getElementById('video');
+    
+        // Initialize the Shaka Player
+        const player = new shaka.Player(video);
+    
+        // Listen for error events
+        player.addEventListener('error', onErrorEvent);
+    
+        // Function to handle errors
+        function onErrorEvent(event) {
+            console.error('Error code', event.detail ? event.detail.code : 'Unknown', 'object', event.detail);
+        }
+    
+        // Add SAS token to segment requests
+        function addSASTokenToSegments(networkingEngine) {
+            networkingEngine.registerRequestFilter(function (type, request) {
+                if (type == shaka.net.NetworkingEngine.RequestType.SEGMENT || type === shaka.net.NetworkingEngine.RequestType.MANIFEST) {
+                    // Append the SAS token to each request URI
+                    request.uris = request.uris.map(uri => `${uri}?${sasToken}`);
+                }
+            });
+        }
+    
+        // Load the manifest URI and configure the player
+        async function initPlayer() {
+            const networkingEngine = player.getNetworkingEngine();
+            addSASTokenToSegments(networkingEngine);
+    
+            const manifestUri = `https://myhlsvideo.azureedge.net/hls/SteamboatWillie.m3u8?`;
+            try {
+                await player.load(manifestUri);
+                console.log('The video has now been loaded!');
+            } catch (error) {
+                console.error('Error loading the video:', error);
+            }
+        }
+    
+        // Initialize the player
+        initPlayer();
+    </script>
+    
+</body>
+
+</html>

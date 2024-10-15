@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Main Page - Video & Streaming Links</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(to right, #ac6edb, #AC6EDB);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+
+        .link-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .link-container a {
+            background-color: #ffffff;
+            color: #2a5298;
+            padding: 15px 25px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.2rem;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+
+        .link-container a:hover {
+            background-color: #2a5298;
+            color: white;
+            transform: translateY(-3px);
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+
+            .link-container a {
+                font-size: 1rem;
+                padding: 12px 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Select a Video or Stream</h1>
+
+    <div class="link-container">
+        <a href="MP4 WITH ORIGIN.html">Page 1: MP4 Video (Origin Hostname)</a>
+        <a href="MP4 WITH CDN.html">Page 2: MP4 Video (CDN Hostname)</a>
+        <a href="ABR(ORIGIN).html">Page 3: ABR Stream (Origin Hostname)</a>
+        <a href="abr(CDN).html">Page 4: ABR Stream (CDN Hostname)</a>
+    </div>
+
+</body>
+
+</html>

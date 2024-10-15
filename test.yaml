@@ -330,3 +330,35 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref LambdaFunction
       Principal: apigateway.amazonaws.com
+
+  Outputs:
+  # Output VPC Peering Connection ID
+  VPCPeeringConnectionID:
+    Description: VPC Peering Connection ID between VPC1 and VPC2
+    Value: !Ref VPCPeeringConnection
+
+  # Output Bastion Host Public IP
+  BastionHostPublicIP:
+    Description: The public IP of the Bastion Host
+    Value: !GetAtt BastionHost.PublicIp
+
+  # Output RDS Endpoint
+  RDSEndpoint:
+    Description: The RDS database endpoint
+    Value: !GetAtt RDSInstance.Endpoint.Address
+
+  # Output Web Server Public IP
+  WebServerPublicIP:
+    Description: The public IP of the Web Server
+    Value: !GetAtt WebServer.PublicIp
+
+  # Output Lambda Function ARN
+  LambdaFunctionArn:
+    Description: The ARN of the Lambda function
+    Value: !GetAtt LambdaFunction.Arn
+
+  # Output API Gateway URL
+  ApiGatewayUrl:
+    Description: The URL of the API Gateway
+    Value: !Sub
+      https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/myresource

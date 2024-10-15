@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLS Stream with SAS Token using Shaka Player</title>
+
+    <!-- Include Shaka Player library from the CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.11.7/dist/shaka-player.ui.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/shaka-player@4.11.7/dist/controls.min.css" rel="stylesheet">
+
+    <!-- Include Google Fonts for better typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+
+    <style>
+        /* Basic reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(to right, #e26bb5, #0ca134);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #fff;
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Video Styling */
+        video {
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            margin-bottom: 15px;
+        }
+
+        /* Quality selector UI */
+        #quality-selection {
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            font-size: 14px;
+            color: #333;
+        }
+
+        #quality-selection label {
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        #quality-selection select {
+            padding: 5px 10px;
+            font-size: 14px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            outline: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        #quality-selection select:hover {
+            background-color: #eaeaea;
+        }
+
+        /* Make the layout responsive */
+        @media (max-width: 768px) {
+            video {
+                width: 100%;
+                height: auto;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            #quality-selection {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Stream with Quality Selection</h1>
+
+    <!-- Video player element -->
+    <video id="video" controls width="640" height="360" autoplay></video>
+
+    <!-- Quality Selection UI -->
+    <div id="quality-selection">
+        <label for="quality-levels">Select Quality: </label>
+        <select id="quality-levels"></select>
+    </div>
+
+    <script>
+        // Azure SAS token
+        const sasToken = "sp=r&st=2024-10-15T16:04:31Z&se=2024-10-16T00:04:31Z&spr=https&sv=2022-11-02&sr=c&sig=2OPCvqedXUBhclG4VhmzG1arI1x1YOX4caZJ2rDEyCE%3D";
+
+        // Get the video element
+        const video = document.getElementById('video');
+
+        // Initialize the Shaka Player
+        const player = new shaka.Player(video);
+
+        // Listen for error events
+        player.addEventListener('error', onErrorEvent);
+
+        // Function to handle errors
+        function onErrorEvent(event) {
+            console.error('Error code', event.detail.code, 'object', event.detail);
+        }
+
+        // Function to append SAS token to all segment requests
+        function addSASTokenToSegments(networkingEngine) {
+            networkingEngine.registerRequestFilter(function (type, request) {
+                if (type == shaka.net.NetworkingEngine.RequestType.SEGMENT || type === shaka.net.NetworkingEngine.RequestType.MANIFEST) {
+                    // Append the SAS token as a query parameter
+                    request.uris = request.uris.map(uri => `${uri}?${sasToken}`);
+                }
+            });
+        }
+
+        // Populate the quality selector UI
+        function populateQualitySelector() {
+            const qualitySelector = document.getElementById('quality-levels');
+            const tracks = player.getVariantTracks();
+
+            // Clear the existing options
+            qualitySelector.innerHTML = '';
+
+            // Add options for each available track (quality level)
+            tracks.forEach(track => {
+                const option = document.createElement('option');
+                option.value = track.id;
+                option.text = `${Math.round(track.bandwidth / 1000)} kbps (${track.height}p)`;
+                qualitySelector.appendChild(option);
+            });
+
+            // Set the current active track as the selected option
+            const activeTrack = tracks.find(track => track.active);
+            if (activeTrack) {
+                qualitySelector.value = activeTrack.id;
+            }
+
+            // Listen for quality selection changes
+            qualitySelector.addEventListener('change', (event) => {
+                const selectedTrackId = parseInt(event.target.value);
+                const selectedTrack = tracks.find(track => track.id === selectedTrackId);
+
+                if (selectedTrack) {
+                    // Disable ABR (adaptive bitrate switching)
+                    player.configure({ abr: { enabled: false } });
+
+                    // Select the chosen track
+                    player.selectVariantTrack(selectedTrack, /* clearBuffer= */ true);
+                    console.log(`Selected quality: ${selectedTrack.height}p (${Math.round(selectedTrack.bandwidth / 1000)} kbps)`);
+                }
+            });
+        }
+
+        // Load the manifest URI and configure the player
+        async function initPlayer() {
+            // Create a networking engine and add the SAS token to segment requests
+            const networkingEngine = player.getNetworkingEngine();
+            addSASTokenToSegments(networkingEngine);
+
+            // Configure the player with the manifest URI
+            const manifestUri = `https://501azstorage.blob.core.windows.net/abrstream1/main (2).m3u8?`;
+            try {
+                await player.load(manifestUri);
+                // Populate the quality selector after loading the video
+                populateQualitySelector();
+                console.log('The video has now been loaded!');
+            } catch (error) {
+                console.error('Error loading the video:', error);
+            }
+        }
+
+        // Initialize the player and load the video
+        initPlayer();
+    </script>
+</body>
+
+</html>
