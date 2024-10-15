@@ -1,0 +1,332 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Two VPCs with Peering, RDS Instance, Bastion Host, Domain Controller, and Web Server
+
+Resources:
+  # Create VPC1
+  VPC1:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: VPC1
+
+  # Create Subnet1A (Public)
+  Subnet1A:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC1
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [0, !GetAZs "us-east-1"]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Subnet1A
+
+  # Create Subnet1B (Private)
+  Subnet1B:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC1
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [1, !GetAZs "us-east-1"]
+      Tags:
+        - Key: Name
+          Value: Subnet1B
+
+  # Create Subnet1C (Another Private Subnet for RDS)
+  Subnet1C:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC1
+      CidrBlock: "10.0.3.0/24"
+      AvailabilityZone: !Select [0, !GetAZs "us-east-1"]
+      Tags:
+        - Key: Name
+          Value: Subnet1C
+
+  # Create VPC2
+  VPC2:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "192.168.1.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: VPC2
+
+  # Create Subnet2A
+  Subnet2A:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC2
+      CidrBlock: "192.168.1.0/24"
+      AvailabilityZone: !Select [0, !GetAZs "us-east-1"]
+      Tags:
+        - Key: Name
+          Value: Subnet2A
+
+  # Create Subnet2B
+  Subnet2B:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC2
+      CidrBlock: "192.168.2.0/24"
+      AvailabilityZone: !Select [1, !GetAZs "us-east-1"]
+      Tags:
+        - Key: Name
+          Value: Subnet2B
+
+  # Create VPC Peering Connection
+  VPCPeeringConnection:
+    Type: "AWS::EC2::VPCPeeringConnection"
+    Properties:
+      VpcId: !Ref VPC1
+      PeerVpcId: !Ref VPC2
+
+  # Route Table for VPC1
+  VPC1RouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: Name
+          Value: VPC1 Route Table
+
+  # Route for VPC1 to VPC2
+  VPC1Route:
+    Type: "AWS::EC2::Route"
+    DependsOn: VPCPeeringConnection
+    Properties:
+      RouteTableId: !Ref VPC1RouteTable
+      DestinationCidrBlock: "192.168.1.0/16"
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection
+
+  # Route Table for VPC2
+  VPC2RouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC2
+      Tags:
+        - Key: Name
+          Value: VPC2 Route Table
+
+  # Route for VPC2 to VPC1
+  VPC2Route:
+    Type: "AWS::EC2::Route"
+    DependsOn: VPCPeeringConnection
+    Properties:
+      RouteTableId: !Ref VPC2RouteTable
+      DestinationCidrBlock: "10.0.0.0/16"
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection
+
+  # Create Security Group for Bastion Host
+  BastionSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: Allow SSH and RDP access to the bastion host
+      VpcId: !Ref VPC1
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          FromPort: "22"
+          ToPort: "22"
+          CidrIp: "0.0.0.0/0"  # SSH access
+        - IpProtocol: "tcp"
+          FromPort: "3389"
+          ToPort: "3389"
+          CidrIp: "0.0.0.0/0"  # RDP access (open this only for a specific IP in production environments)
+        - IpProtocol: "tcp"
+          FromPort: "80"
+          ToPort: "80"
+          CidrIp: "0.0.0.0/0"  # HTTP access
+        - IpProtocol: "icmp"
+          FromPort: "-1"        # Allows all ICMP traffic (for ping)
+          ToPort: "-1"
+          CidrIp: "0.0.0.0/0"   # ICMP access
+
+  # Create Bastion Host EC2 Instance
+  BastionHost:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      InstanceType: "t2.micro"
+      KeyName: vockey
+      ImageId: ami-0888db1202897905c # Amazon Linux 2 AMI (update based on your region)
+      SubnetId: !Ref Subnet1A
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+
+  # Create RDS Instance
+  RDSInstance:
+    Type: "AWS::RDS::DBInstance"
+    Properties:
+      DBInstanceIdentifier: mydatabase
+      AllocatedStorage: "20"
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      MasterUsername: admin
+      MasterUserPassword: Gurkirat123
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      MultiAZ: false
+
+  # Create DB Subnet Group
+  DBSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref Subnet1B
+        - !Ref Subnet1C # Add another private subnet
+      DBSubnetGroupName: MyDBSubnetGroup
+
+  # Create Security Group for RDS
+  RDSSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: Enable access to RDS from Bastion Host
+      VpcId: !Ref VPC1
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          FromPort: "3306" # MySQL port
+          ToPort: "3306"
+          SourceSecurityGroupId: !Ref BastionSecurityGroup
+
+  # Create Domain Controller Security Group
+  DomainControllerSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: Allow access to the Domain Controller
+      VpcId: !Ref VPC1
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          FromPort: "3389" # RDP access
+          ToPort: "3389"
+          CidrIp: "0.0.0.0/0" # Replace with your IP or range
+        - IpProtocol: "tcp"
+          FromPort: "53"
+          ToPort: "53"
+          CidrIp: "0.0.0.0/0" # DNS access
+
+  # Create Domain Controller EC2 Instance
+  DomainController:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      InstanceType: "t2.micro"
+      KeyName: vockey # Replace with your key pair name
+      ImageId: ami-0888db1202897905c # Windows Server AMI (update based on your region)
+      SubnetId: !Ref Subnet1B
+      SecurityGroupIds:
+        - !Ref DomainControllerSecurityGroup
+
+  # Create Web Server Security Group
+  WebServerSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: Allow HTTP and SSH access to the web server
+      VpcId: !Ref VPC1
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          FromPort: "22"
+          ToPort: "22"
+          CidrIp: "0.0.0.0/0" # SSH access
+        - IpProtocol: "tcp"
+          FromPort: "80"
+          ToPort: "80"
+          CidrIp: "0.0.0.0/0" # HTTP access
+
+  # Create Web Server EC2 Instance
+  WebServer:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      InstanceType: "t2.micro"
+      KeyName: vockey # Replace with your key pair name
+      ImageId: ami-0888db1202897905c # Amazon Linux 2 AMI (update based on your region)
+      SubnetId: !Ref Subnet1A
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+
+  
+  LambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: MyLambdaFunction
+      Handler: index.handler
+      Role: arn:aws:iam::616034794051:role/LabRole
+      Code:
+        ZipFile: |
+          import json
+          import pymysql
+          import os
+
+          rds_host = os.environ['RDS_HOST']
+          name = os.environ['RDS_USERNAME']
+          password = os.environ['RDS_PASSWORD']
+          db_name = os.environ['RDS_DB_NAME']
+
+          def handler(event, context):
+              conn = pymysql.connect(rds_host, user=name, passwd=password, db=db_name, connect_timeout=5)
+              with conn.cursor() as cur:
+                  cur.execute("SELECT * FROM your_table")  # Replace 'your_table' with your actual table name
+                  result = cur.fetchall()
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps(result)
+              }
+      Runtime: python3.8
+      Timeout: 10
+      Environment:
+        Variables:
+          RDS_HOST: !GetAtt RDSInstance.Endpoint.Address
+          RDS_USERNAME: admin
+          RDS_PASSWORD: Gurkirat123  # Store secrets in AWS Secrets Manager for production
+          RDS_DB_NAME: mydatabase
+
+  # Create API Gateway
+  ApiGateway:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: MyApi
+      Description: API Gateway for my Lambda function
+
+  # Create a resource in the API
+  ApiResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: myresource
+      RestApiId: !Ref ApiGateway
+
+  # Create a method for the resource
+  ApiMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      HttpMethod: GET
+      ResourceId: !Ref ApiResource
+      RestApiId: !Ref ApiGateway
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+
+  # Grant API Gateway permission to invoke the Lambda function
+  LambdaInvokePermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: apigateway.amazonaws.com
