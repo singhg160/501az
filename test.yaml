@@ -133,19 +133,19 @@ Resources:
         - IpProtocol: "tcp"
           FromPort: "22"
           ToPort: "22"
-          CidrIp: "0.0.0.0/0"  # SSH access
+          CidrIp: "0.0.0.0/0" # SSH access
         - IpProtocol: "tcp"
           FromPort: "3389"
           ToPort: "3389"
-          CidrIp: "0.0.0.0/0"  # RDP access (open this only for a specific IP in production environments)
+          CidrIp: "0.0.0.0/0" # RDP access (open this only for a specific IP in production environments)
         - IpProtocol: "tcp"
           FromPort: "80"
           ToPort: "80"
-          CidrIp: "0.0.0.0/0"  # HTTP access
+          CidrIp: "0.0.0.0/0" # HTTP access
         - IpProtocol: "icmp"
-          FromPort: "-1"        # Allows all ICMP traffic (for ping)
+          FromPort: "-1" # Allows all ICMP traffic (for ping)
           ToPort: "-1"
-          CidrIp: "0.0.0.0/0"   # ICMP access
+          CidrIp: "0.0.0.0/0" # ICMP access
 
   # Create Bastion Host EC2 Instance
   BastionHost:
@@ -237,6 +237,10 @@ Resources:
           FromPort: "80"
           ToPort: "80"
           CidrIp: "0.0.0.0/0" # HTTP access
+        - IpProtocol: "tcp"
+          FromPort: "443"
+          ToPort: "443"
+          CidrIp: "0.0.0.0/0" # HTTPs access
 
   # Create Web Server EC2 Instance
   WebServer:
@@ -256,9 +260,8 @@ Resources:
           systemctl start httpd
           systemctl enable httpd
 
-  
   LambdaFunction:
-    Type: 'AWS::Lambda::Function'
+    Type: "AWS::Lambda::Function"
     Properties:
       FunctionName: MyLambdaFunction
       Handler: index.handler
@@ -289,19 +292,19 @@ Resources:
         Variables:
           RDS_HOST: !GetAtt RDSInstance.Endpoint.Address
           RDS_USERNAME: admin
-          RDS_PASSWORD: Gurkirat123  # Store secrets in AWS Secrets Manager for production
+          RDS_PASSWORD: Gurkirat123 # Store secrets in AWS Secrets Manager for production
           RDS_DB_NAME: mydatabase
 
   # Create API Gateway
   ApiGateway:
-    Type: 'AWS::ApiGateway::RestApi'
+    Type: "AWS::ApiGateway::RestApi"
     Properties:
       Name: MyApi
       Description: API Gateway for my Lambda function
 
   # Create a resource in the API
   ApiResource:
-    Type: 'AWS::ApiGateway::Resource'
+    Type: "AWS::ApiGateway::Resource"
     Properties:
       ParentId: !GetAtt ApiGateway.RootResourceId
       PathPart: myresource
@@ -309,7 +312,7 @@ Resources:
 
   # Create a method for the resource
   ApiMethod:
-    Type: 'AWS::ApiGateway::Method'
+    Type: "AWS::ApiGateway::Method"
     Properties:
       HttpMethod: GET
       ResourceId: !Ref ApiResource
@@ -318,20 +321,20 @@ Resources:
       Integration:
         IntegrationHttpMethod: POST
         Type: AWS_PROXY
-        Uri: !Sub
-          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
       MethodResponses:
         - StatusCode: 200
 
   # Grant API Gateway permission to invoke the Lambda function
   LambdaInvokePermission:
-    Type: 'AWS::Lambda::Permission'
+    Type: "AWS::Lambda::Permission"
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref LambdaFunction
       Principal: apigateway.amazonaws.com
 
-  Outputs:
+  
+Outputs:
   # Output VPC Peering Connection ID
   VPCPeeringConnectionID:
     Description: VPC Peering Connection ID between VPC1 and VPC2
@@ -351,14 +354,3 @@ Resources:
   WebServerPublicIP:
     Description: The public IP of the Web Server
     Value: !GetAtt WebServer.PublicIp
-
-  # Output Lambda Function ARN
-  LambdaFunctionArn:
-    Description: The ARN of the Lambda function
-    Value: !GetAtt LambdaFunction.Arn
-
-  # Output API Gateway URL
-  ApiGatewayUrl:
-    Description: The URL of the API Gateway
-    Value: !Sub
-      https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/myresource

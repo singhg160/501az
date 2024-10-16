@@ -1,174 +1,183 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: CloudFormation template to create two VPCs, a peering connection, an RDS instance, a web server, and a Domain Controller.
+Description: CloudFormation template to create two VPCs, a peering connection, an RDS instance, a web server, and an Application Load Balancer (ALB).
+
+Parameters:
+  KeyName:
+    Type: String
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances.
+    Default: vockey
 
 Resources:
-  # Create VPC1 (for RDS and Domain Controller)
+  # VPC1 for RDS
   VPC1:
-    Type: "AWS::EC2::VPC"
+    Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: "10.0.0.0/16"
+      CidrBlock: 10.0.0.0/16
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
           Value: VPC1
 
-  # Create VPC2 (for Web Server)
+  # VPC2 for Web Server
   VPC2:
-    Type: "AWS::EC2::VPC"
+    Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: "10.1.0.0/16"
+      CidrBlock: 10.1.0.0/16
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
           Value: VPC2
 
-  # Create Private Subnet in VPC1 (for RDS and Domain Controller)
-  PrivateSubnetVPC1:
-    Type: "AWS::EC2::Subnet"
+  # Subnet for RDS (Private, AZ1)
+  PrivateSubnetVPC1AZ1:
+    Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC1
-      CidrBlock: "10.0.1.0/24"
-      AvailabilityZone: !Select [0, !GetAZs "us-east-1"]
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '' ]
       Tags:
         - Key: Name
-          Value: Private-Subnet-VPC1
+          Value: Private-Subnet-VPC1-AZ1
 
-  # Create Public Subnet in VPC2 (for Web Server)
+  # Additional Subnet for RDS (Private, AZ2)
+  PrivateSubnetVPC1AZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: Private-Subnet-VPC1-AZ2
+
+  # Subnet for Web Server (Public)
   PublicSubnetVPC2:
-    Type: "AWS::EC2::Subnet"
+    Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC2
-      CidrBlock: "10.1.1.0/24"
-      AvailabilityZone: !Select [0, !GetAZs "us-east-1"]
+      CidrBlock: 10.1.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: Public-Subnet-VPC2
 
-  # Create Internet Gateway for VPC2
-  InternetGateway:
-    Type: "AWS::EC2::InternetGateway"
-    Properties: {}
+  # Internet Gateway for VPC2
+  InternetGatewayVPC2:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IGW-VPC2
 
-  # Attach Internet Gateway to VPC2
-  AttachInternetGateway:
-    Type: "AWS::EC2::VPCGatewayAttachment"
+  AttachGatewayVPC2:
+    Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC2
-      InternetGatewayId: !Ref InternetGateway
+      InternetGatewayId: !Ref InternetGatewayVPC2
 
-  # Create Route Table for Public Subnet in VPC2
-  PublicRouteTable:
-    Type: "AWS::EC2::RouteTable"
+  # Route Table for VPC2 (for public subnet)
+  PublicRouteTableVPC2:
+    Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC2
       Tags:
         - Key: Name
-          Value: PublicRouteTable
+          Value: Public-RouteTable-VPC2
 
-  # Create Route to allow Internet access
-  PublicRoute:
-    Type: "AWS::EC2::Route"
+  PublicRouteVPC2:
+    Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: "0.0.0.0/0"
-      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableVPC2
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGatewayVPC2
 
-  # Associate Route Table with Public Subnet
-  AssociatePublicRouteTable:
-    Type: "AWS::EC2::SubnetRouteTableAssociation"
+  RouteTableAssociationVPC2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnetVPC2
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref PublicRouteTableVPC2
 
-  # Create VPC Peering Connection between VPC1 and VPC2
+  # VPC Peering Connection between VPC1 and VPC2
   VPCPeeringConnection:
-    Type: "AWS::EC2::VPCPeeringConnection"
+    Type: AWS::EC2::VPCPeeringConnection
     Properties:
       VpcId: !Ref VPC1
       PeerVpcId: !Ref VPC2
 
-  # Create RDS Security Group in VPC1
+  AcceptVPCPeeringConnection:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection
+
+  # Security Group for RDS
   RDSSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "Allow MySQL access from Web Server"
+      GroupDescription: Allow MySQL traffic from Web Server
       VpcId: !Ref VPC1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
 
-  # Create Web Server Security Group in VPC2
+  # Security Group for Web Server
   WebServerSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "Allow HTTP and SSH"
+      GroupDescription: Allow HTTP and SSH traffic
       VpcId: !Ref VPC2
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
 
-  # Add Ingress Rule for RDS Security Group (Allowing MySQL Traffic from Web Server)
-  RDSIngressRule:
-    Type: "AWS::EC2::SecurityGroupIngress"
+  # RDS Subnet Group (Two Subnets in Two AZs)
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
     Properties:
-      GroupId: !Ref RDSSecurityGroup
-      IpProtocol: "tcp"
-      FromPort: 3306
-      ToPort: 3306
-      SourceSecurityGroupId: !Ref WebServerSecurityGroup
-
-  # Add Ingress Rules for Web Server Security Group (Allowing HTTP/SSH)
-  WebServerHTTPIngressRule:
-    Type: "AWS::EC2::SecurityGroupIngress"
-    Properties:
-      GroupId: !Ref WebServerSecurityGroup
-      IpProtocol: "tcp"
-      FromPort: 80
-      ToPort: 80
-      CidrIp: "0.0.0.0/0"
-
-  WebServerSSHIngressRule:
-    Type: "AWS::EC2::SecurityGroupIngress"
-    Properties:
-      GroupId: !Ref WebServerSecurityGroup
-      IpProtocol: "tcp"
-      FromPort: 22
-      ToPort: 22
-      CidrIp: "0.0.0.0/0"
-
-  # Create DB Subnet Group for RDS
-  DBSubnetGroup:
-    Type: "AWS::RDS::DBSubnetGroup"
-    Properties:
-      DBSubnetGroupDescription: "Private subnet for RDS"
+      DBSubnetGroupName: MyRDSSubnetGroup
+      DBSubnetGroupDescription: Private Subnets for RDS
       SubnetIds:
-        - !Ref PrivateSubnetVPC1
-      DBSubnetGroupName: "MyRDSSubnetGroup"
+        - !Ref PrivateSubnetVPC1AZ1
+        - !Ref PrivateSubnetVPC1AZ2
 
-  # Create RDS MySQL Instance
+  # RDS MySQL Instance
   RDSInstance:
-    Type: "AWS::RDS::DBInstance"
+    Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: "MyRDSInstance"
-      AllocatedStorage: "20"
-      DBInstanceClass: "db.t3.micro"
-      Engine: "mysql"
-      MasterUsername: "admin"
-      MasterUserPassword: "password123"
+      DBInstanceIdentifier: MyRDSInstance
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      MasterUsername: admin
+      MasterUserPassword: password123
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBSubnetGroupName: !Ref RDSSubnetGroup
       PubliclyAccessible: false
 
-  # Launch EC2 Instance for Web Server
-  WebServer:
-    Type: "AWS::EC2::Instance"
+  # EC2 Web Server Instance (Single instance behind ALB)
+  WebServerInstance:
+    Type: AWS::EC2::Instance
     Properties:
-      ImageId: "ami-0888db1202897905c"  # AMI for Web Server (replace with valid AMI ID if needed)
-      InstanceType: "t2.micro"
-      KeyName: "vockey"  # Key Pair Name
+      InstanceType: t2.micro
+      ImageId: ami-0888db1202897905c
+      KeyName: !Ref KeyName
       SecurityGroupIds:
         - !Ref WebServerSecurityGroup
       SubnetId: !Ref PublicSubnetVPC2
+      IamInstanceProfile: !Ref InstanceRole
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y httpd mysql
@@ -176,54 +185,56 @@ Resources:
           systemctl enable httpd
           echo "<?php phpinfo(); ?>" > /var/www/html/index.php
           echo "<?php
-          \$conn = new mysqli('${RDSInstance.Endpoint.Address}', 'admin', 'password123', 'MyDatabase');
+          \$conn = new mysqli('DB_ENDPOINT', 'admin', 'password123', 'MyDatabase');
           if (\$conn->connect_error) {
               die('Connection failed: ' . \$conn->connect_error);
           }
           echo 'Connected successfully to RDS!';
           ?>" > /var/www/html/db_test.php
 
-  # Launch EC2 Instance for Domain Controller in VPC1
-  DomainController:
-    Type: "AWS::EC2::Instance"
+  # ALB for Web Server
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      ImageId: "ami-0888db1202897905c"  # AMI for Domain Controller (replace with valid AMI ID if needed)
-      InstanceType: "t2.micro"
-      KeyName: "vockey"  # Key Pair Name
-      IamInstanceProfile: "LabRole"  # IAM Role
-      SecurityGroupIds:
-        - !Ref RDSSecurityGroup  # Allowing domain controller security group rules
-      SubnetId: !Ref PrivateSubnetVPC1
-      UserData:
-        Fn::Base64: !Sub |
-          <powershell>
-          # Install Active Directory Domain Services
-          Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
-          # Create a new forest with domain name 'example.local'
-          Install-ADDSForest -DomainName "example.local" -DomainNetbiosName "EXAMPLE" -ForestMode "Windows2016Forest" -DomainMode "Windows2016Domain" -InstallDns -NoRebootOnCompletion -Force
-          </powershell>
+      Name: WebServer-ALB
+      Subnets:
+        - !Ref PublicSubnetVPC2
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+      Scheme: internet-facing
+
+  # Target Group for ALB
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: WebServerTargetGroup
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC2
+      TargetType: instance
+      Targets:
+        - Id: !Ref WebServerInstance
+
+  # ALB Listener to route traffic to EC2
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      Port: 80
+      Protocol: HTTP
 
 Outputs:
-  VPC1ID:
-    Description: "VPC1 ID"
-    Value: !Ref VPC1
+  WebServerPublicIP:
+    Description: Public IP of the Web Server instance
+    Value: !GetAtt WebServerInstance.PublicIp
 
-  VPC2ID:
-    Description: "VPC2 ID"
-    Value: !Ref VPC2
+  LoadBalancerDNS:
+    Description: DNS Name of the Application Load Balancer
+    Value: !GetAtt LoadBalancer.DNSName
 
   RDSInstanceEndpoint:
-    Description: "RDS Instance Endpoint"
+    Description: Endpoint of the RDS instance
     Value: !GetAtt RDSInstance.Endpoint.Address
-
-  WebServerPublicIP:
-    Description: "Public IP of the Web Server"
-    Value: !GetAtt WebServer.PublicIp
-
-  DomainControllerPublicIP:
-    Description: "Public IP of the Domain Controller"
-    Value: !GetAtt DomainController.PublicIp
-
-  VPCPeeringConnectionID:
-    Description: "VPC Peering Connection ID"
-    Value: !Ref VPCPeeringConnection
