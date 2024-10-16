@@ -1,240 +1,247 @@
-AWSTemplateFormatVersion: "2010-09-09"
-Description: CloudFormation template to create two VPCs, a peering connection, an RDS instance, a web server, and an Application Load Balancer (ALB).
+<!DOCTYPE html>
+<html lang="en">
 
-Parameters:
-  KeyName:
-    Type: String
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances.
-    Default: vockey
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLS Stream with SAS Token using Shaka Player</title>
 
-Resources:
-  # VPC1 for RDS
-  VPC1:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: VPC1
+    <!-- Include Shaka Player library from the CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.11.7/dist/shaka-player.ui.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/shaka-player@4.11.7/dist/controls.min.css" rel="stylesheet">
 
-  # VPC2 for Web Server
-  VPC2:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.1.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: VPC2
+    <!-- Include Google Fonts for better typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 
-  # Subnet for RDS (Private, AZ1)
-  PrivateSubnetVPC1AZ1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC1
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '' ]
-      Tags:
-        - Key: Name
-          Value: Private-Subnet-VPC1-AZ1
+    <style>
+        /* Basic reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-  # Additional Subnet for RDS (Private, AZ2)
-  PrivateSubnetVPC1AZ2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC1
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '' ]
-      Tags:
-        - Key: Name
-          Value: Private-Subnet-VPC1-AZ2
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(to right, #e26bb5, #0ca134);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            padding: 20px;
+            text-align: center;
+        }
 
-  # Subnet for Web Server (Public)
-  PublicSubnetVPC2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC2
-      CidrBlock: 10.1.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '' ]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: Public-Subnet-VPC2
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #fff;
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
+        }
 
-  # Internet Gateway for VPC2
-  InternetGatewayVPC2:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: IGW-VPC2
+        /* Video Styling */
+        video {
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            margin-bottom: 15px;
+        }
 
-  AttachGatewayVPC2:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC2
-      InternetGatewayId: !Ref InternetGatewayVPC2
+        /* Quality selector UI */
+        #quality-selection {
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            font-size: 14px;
+            color: #333;
+        }
 
-  # Route Table for VPC2 (for public subnet)
-  PublicRouteTableVPC2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC2
-      Tags:
-        - Key: Name
-          Value: Public-RouteTable-VPC2
+        #quality-selection label {
+            font-weight: 600;
+            margin-right: 10px;
+        }
 
-  PublicRouteVPC2:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PublicRouteTableVPC2
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGatewayVPC2
+        #quality-selection select {
+            padding: 5px 10px;
+            font-size: 14px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            outline: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
 
-  RouteTableAssociationVPC2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnetVPC2
-      RouteTableId: !Ref PublicRouteTableVPC2
+        #quality-selection select:hover {
+            background-color: #eaeaea;
+        }
 
-  # VPC Peering Connection between VPC1 and VPC2
-  VPCPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      VpcId: !Ref VPC1
-      PeerVpcId: !Ref VPC2
+        /* Make the layout responsive */
+        @media (max-width: 768px) {
+            video {
+                width: 100%;
+                height: auto;
+            }
 
-  AcceptVPCPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      VpcPeeringConnectionId: !Ref VPCPeeringConnection
+            h1 {
+                font-size: 2rem;
+            }
 
-  # Security Group for RDS
-  RDSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow MySQL traffic from Web Server
-      VpcId: !Ref VPC1
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+            #quality-selection {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
 
-  # Security Group for Web Server
-  WebServerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow HTTP and SSH traffic
-      VpcId: !Ref VPC2
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
+<body>
 
-  # RDS Subnet Group (Two Subnets in Two AZs)
-  RDSSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupName: MyRDSSubnetGroup
-      DBSubnetGroupDescription: Private Subnets for RDS
-      SubnetIds:
-        - !Ref PrivateSubnetVPC1AZ1
-        - !Ref PrivateSubnetVPC1AZ2
+    <h1>Stream with Quality Selection</h1>
 
-  # RDS MySQL Instance
-  RDSInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceIdentifier: MyRDSInstance
-      AllocatedStorage: 20
-      DBInstanceClass: db.t3.micro
-      Engine: mysql
-      MasterUsername: admin
-      MasterUserPassword: password123
-      VPCSecurityGroups:
-        - !Ref RDSSecurityGroup
-      DBSubnetGroupName: !Ref RDSSubnetGroup
-      PubliclyAccessible: false
+    <!-- Video player element -->
+    <video id="video" controls width="640" height="360" autoplay></video>
+    
 
-  # EC2 Web Server Instance (Single instance behind ALB)
-  WebServerInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: t2.micro
-      ImageId: ami-0888db1202897905c
-      KeyName: !Ref KeyName
-      SecurityGroupIds:
-        - !Ref WebServerSecurityGroup
-      SubnetId: !Ref PublicSubnetVPC2
-      IamInstanceProfile: !Ref InstanceRole
-      UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd mysql
-          systemctl start httpd
-          systemctl enable httpd
-          echo "<?php phpinfo(); ?>" > /var/www/html/index.php
-          echo "<?php
-          \$conn = new mysqli('DB_ENDPOINT', 'admin', 'password123', 'MyDatabase');
-          if (\$conn->connect_error) {
-              die('Connection failed: ' . \$conn->connect_error);
-          }
-          echo 'Connected successfully to RDS!';
-          ?>" > /var/www/html/db_test.php
 
-  # ALB for Web Server
-  LoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: WebServer-ALB
-      Subnets:
-        - !Ref PublicSubnetVPC2
-      SecurityGroups:
-        - !Ref WebServerSecurityGroup
-      Scheme: internet-facing
+    <!-- Quality Selection UI -->
+    <div id="quality-selection">
+        <label for="quality-levels">Select Quality: </label>
+        <select id="quality-levels"></select>
+    </div>
+    <div id="log-container"
+    style="margin-top: 10px; border: 1px solid #0a0909; padding: 10px; height: 200px; overflow-y: auto;">
+    <strong>Load Time Logs:</strong>
+    <ul id="log-list"></ul>
+</div>
 
-  # Target Group for ALB
-  TargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: WebServerTargetGroup
-      Port: 80
-      Protocol: HTTP
-      VpcId: !Ref VPC2
-      TargetType: instance
-      Targets:
-        - Id: !Ref WebServerInstance
+    <script>
+        // Azure SAS token
+        const sasToken = "sp=r&st=2024-10-15T16:04:31Z&se=2024-10-16T00:04:31Z&spr=https&sv=2022-11-02&sr=c&sig=2OPCvqedXUBhclG4VhmzG1arI1x1YOX4caZJ2rDEyCE%3D";
 
-  # ALB Listener to route traffic to EC2
-  Listener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref LoadBalancer
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref TargetGroup
-      Port: 80
-      Protocol: HTTP
+        // Get the video element
+        const video = document.getElementById('video');
+        const logList = document.getElementById('log-list');
+        const logStatic = document.getElementById('log-static');
 
-Outputs:
-  WebServerPublicIP:
-    Description: Public IP of the Web Server instance
-    Value: !GetAtt WebServerInstance.PublicIp
+        // Initialize the Shaka Player
+        const player = new shaka.Player(video);
 
-  LoadBalancerDNS:
-    Description: DNS Name of the Application Load Balancer
-    Value: !GetAtt LoadBalancer.DNSName
+        // Listen for error events
+        player.addEventListener('error', onErrorEvent);
 
-  RDSInstanceEndpoint:
-    Description: Endpoint of the RDS instance
-    Value: !GetAtt RDSInstance.Endpoint.Address
+        // Function to handle errors
+        function onErrorEvent(event) {
+            console.error('Error code', event.detail.code, 'object', event.detail);
+        }
+
+        // Function to append SAS token to all segment requests
+        function addSASTokenToSegments(networkingEngine) {
+            networkingEngine.registerRequestFilter(function (type, request) {
+                if (type == shaka.net.NetworkingEngine.RequestType.SEGMENT || type === shaka.net.NetworkingEngine.RequestType.MANIFEST) {
+                    // Append the SAS token as a query parameter
+                    console.log(request.uris);
+                    request.uris = request.uris.map(uri => `${uri}?${sasToken}`);
+                    //request.uris = request.uris.map(uri => `${uri}`);
+                    console.log(request.uris);
+                }
+            });
+        }
+
+        // Populate the quality selector UI
+        function populateQualitySelector() {
+            const qualitySelector = document.getElementById('quality-levels');
+            const tracks = player.getVariantTracks();
+
+            // Clear the existing options
+            qualitySelector.innerHTML = '';
+
+            // Add options for each available track (quality level)
+            tracks.forEach(track => {
+                const option = document.createElement('option');
+                option.value = track.id;
+                option.text = `${Math.round(track.bandwidth / 1000)} kbps`;
+                qualitySelector.appendChild(option);
+            });
+
+
+            // Set the current active track as the selected option
+            const activeTrack = tracks.find(track => track.active);
+            if (activeTrack) {
+                qualitySelector.value = activeTrack.id;
+            }
+
+            // Listen for quality selection changes
+            qualitySelector.addEventListener('change', (event) => {
+                const selectedTrackId = parseInt(event.target.value);
+                const selectedTrack = tracks.find(track => track.id === selectedTrackId);
+
+                if (selectedTrack) {
+                    // Disable ABR (adaptive bitrate switching)
+                    player.configure({ abr: { enabled: false } });
+
+                    // Select the chosen track
+                    player.selectVariantTrack(selectedTrack, /* clearBuffer= */ true);
+                    console.log(`Selected quality: ${selectedTrack.height}p (${Math.round(selectedTrack.bandwidth / 1000)} kbps)`);
+                }
+            });
+        }
+
+        function logToPage(message) {
+            const li = document.createElement('li');
+            li.textContent = message;
+            logList.appendChild(li);
+        }
+
+        // Log segment loads using PerformanceObserver
+        const observer = new PerformanceObserver((list) => {
+            const entries = list.getEntries();
+            entries.forEach((entry) => {
+                if (entry.initiatorType === 'fetch' || entry.initiatorType === 'xmlhttprequest') {
+                    const url = new URL(entry.name);
+
+                    // Check if the pathname contains ".ts" (not necessarily ends with it)
+                    if (url.pathname.includes('.ts')) {
+                        const loadTime = entry.responseEnd - entry.startTime;
+
+                        // Decide if the segment is loaded from PoP or Origin
+                        //const source = loadTime < 75 ? 'PoP' : 'Origin';
+                        //logToPage(`Segment ${url.pathname} loaded from ${source}: ${loadTime.toFixed(2)} ms`);
+                        logToPage(`Segment ${url.pathname} loaded: ${loadTime.toFixed(2)} ms`);
+                    }
+                }
+            });
+        });
+
+        // Observe fetch and XHR requests
+        observer.observe({ entryTypes: ['resource'] });
+
+
+        // Load the manifest URI and configure the player
+        async function initPlayer() {
+            // Create a networking engine and add the SAS token to segment requests
+            const networkingEngine = player.getNetworkingEngine();
+            addSASTokenToSegments(networkingEngine);
+
+            // Configure the player with the manifest URI
+            const manifestUri = `https://myhlsvideo.azureedge.net/abrstream1/main (2).m3u8?`;
+            console.log(manifestUri);
+            try {
+                await player.load(manifestUri);
+                // Populate the quality selector after loading the video
+                populateQualitySelector();
+                console.log('The video has now been loaded!');
+            } catch (error) {
+                console.error('Error loading the video:', error);
+            }
+        }
+
+        // Initialize the player and load the video
+        initPlayer();
+    </script>
+</body>
+
+</html>

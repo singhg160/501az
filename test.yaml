@@ -199,7 +199,7 @@ Resources:
   DomainControllerSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
-      GroupDescription: Allow access to the Domain Controller
+      GroupDescription:   
       VpcId: !Ref VPC1
       SecurityGroupIngress:
         - IpProtocol: "tcp"
@@ -248,7 +248,7 @@ Resources:
     Properties:
       InstanceType: "t2.micro"
       KeyName: vockey # Replace with your key pair name
-      ImageId: ami-0888db1202897905c # Amazon Linux 2 AMI (update based on your region)
+      ImageId: ami-00f251754ac5da7f0 # Amazon Linux 2 AMI (update based on your region)
       SubnetId: !Ref Subnet1A
       SecurityGroupIds:
         - !Ref WebServerSecurityGroup

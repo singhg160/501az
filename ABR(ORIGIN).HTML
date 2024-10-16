@@ -104,19 +104,28 @@
 
     <!-- Video player element -->
     <video id="video" controls width="640" height="360" autoplay></video>
+    
+
 
     <!-- Quality Selection UI -->
     <div id="quality-selection">
         <label for="quality-levels">Select Quality: </label>
         <select id="quality-levels"></select>
     </div>
+    <div id="log-container"
+    style="margin-top: 10px; border: 1px solid #0a0909; padding: 10px; height: 200px; overflow-y: auto;">
+    <strong>Load Time Logs:</strong>
+    <ul id="log-list"></ul>
+</div>
 
     <script>
         // Azure SAS token
-        const sasToken = "sp=r&st=2024-10-15T16:04:31Z&se=2024-10-16T00:04:31Z&spr=https&sv=2022-11-02&sr=c&sig=2OPCvqedXUBhclG4VhmzG1arI1x1YOX4caZJ2rDEyCE%3D";
+        const sasToken = "sp=r&st=2024-10-16T09:33:10Z&se=2024-10-16T17:33:10Z&spr=https&sv=2022-11-02&sr=c&sig=Ds78u6sibOAOEH0qcRyiRTBdlS6vm3b3uktTdIxrm1E%3D";
 
         // Get the video element
         const video = document.getElementById('video');
+        const logList = document.getElementById('log-list');
+        const logStatic = document.getElementById('log-static');
 
         // Initialize the Shaka Player
         const player = new shaka.Player(video);
@@ -134,7 +143,10 @@
             networkingEngine.registerRequestFilter(function (type, request) {
                 if (type == shaka.net.NetworkingEngine.RequestType.SEGMENT || type === shaka.net.NetworkingEngine.RequestType.MANIFEST) {
                     // Append the SAS token as a query parameter
+                    console.log(request.uris);
                     request.uris = request.uris.map(uri => `${uri}?${sasToken}`);
+                    //request.uris = request.uris.map(uri => `${uri}`);
+                    console.log(request.uris);
                 }
             });
         }
@@ -151,9 +163,10 @@
             tracks.forEach(track => {
                 const option = document.createElement('option');
                 option.value = track.id;
-                option.text = `${Math.round(track.bandwidth / 1000)} kbps (${track.height}p)`;
+                option.text = `${Math.round(track.bandwidth / 1000)} kbps`;
                 qualitySelector.appendChild(option);
             });
+
 
             // Set the current active track as the selected option
             const activeTrack = tracks.find(track => track.active);
@@ -177,6 +190,36 @@
             });
         }
 
+        function logToPage(message) {
+            const li = document.createElement('li');
+            li.textContent = message;
+            logList.appendChild(li);
+        }
+
+        // Log segment loads using PerformanceObserver
+        const observer = new PerformanceObserver((list) => {
+            const entries = list.getEntries();
+            entries.forEach((entry) => {
+                if (entry.initiatorType === 'fetch' || entry.initiatorType === 'xmlhttprequest') {
+                    const url = new URL(entry.name);
+
+                    // Check if the pathname contains ".ts" (not necessarily ends with it)
+                    if (url.pathname.includes('.ts')) {
+                        const loadTime = entry.responseEnd - entry.startTime;
+
+                        // Decide if the segment is loaded from PoP or Origin
+                        //const source = loadTime < 75 ? 'PoP' : 'Origin';
+                        //logToPage(`Segment ${url.pathname} loaded from ${source}: ${loadTime.toFixed(2)} ms`);
+                        logToPage(`Segment ${url.pathname} loaded: ${loadTime.toFixed(2)} ms`);
+                    }
+                }
+            });
+        });
+
+        // Observe fetch and XHR requests
+        observer.observe({ entryTypes: ['resource'] });
+
+
         // Load the manifest URI and configure the player
         async function initPlayer() {
             // Create a networking engine and add the SAS token to segment requests
@@ -185,6 +228,7 @@
 
             // Configure the player with the manifest URI
             const manifestUri = `https://501azstorage.blob.core.windows.net/abrstream1/main (2).m3u8?`;
+            console.log(manifestUri);
             try {
                 await player.load(manifestUri);
                 // Populate the quality selector after loading the video
