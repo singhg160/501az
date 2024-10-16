@@ -93,7 +93,7 @@
 
     <script>
         // Azure SAS token
-        const sasToken = "sp=r&st=2024-10-16T13:05:55Z&se=2024-10-19T21:05:55Z&spr=https&sv=2022-11-02&sr=c&sig=vm9vsZ%2FEmvKLSPmYWnnKSKPThH4ApwK4NVzWJCsIkxM%3D";
+        const sasToken = "sp=r&st=2024-10-16T13:34:19Z&se=2024-10-18T21:34:19Z&spr=https&sv=2022-11-02&sr=c&sig=awUkzg9xQxJEOfpQYa%2FYimdNvXl7ScRjfzbvxrMXAtc%3D";
     
         // Get the video element
         const video = document.getElementById('video');
@@ -124,7 +124,7 @@
             const networkingEngine = player.getNetworkingEngine();
             addSASTokenToSegments(networkingEngine);
     
-            const manifestUri = `https://myhlsvideo.azureedge.net/hls/SteamboatWillie.m3u8?`;
+            const manifestUri = `https://myhlsvideo.azureedge.net/hls/501.m3u8?`;
             try {
                 await player.load(manifestUri);
                 console.log('The video has now been loaded!');

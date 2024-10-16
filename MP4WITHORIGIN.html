@@ -124,7 +124,7 @@
             const networkingEngine = player.getNetworkingEngine();
             addSASTokenToSegments(networkingEngine);
     
-            const manifestUri = `https://501azstorage.blob.core.windows.net/hls/SteamboatWillie.m3u8?`;
+            const manifestUri = `https://501azstorage.blob.core.windows.net/hls/501.m3u8?`;
             try {
                 await player.load(manifestUri);
                 console.log('The video has now been loaded!');
